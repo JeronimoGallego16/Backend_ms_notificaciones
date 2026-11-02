@@ -1,4 +1,5 @@
 credentials/
+.venv/
 .tfa_hash_secret
 .env
 .env.*
