@@ -1,2 +1,11 @@
 credentials/
 .tfa_hash_secret
+.env
+.env.*
+!.env.example
+*.pickle
+credentials.json
+.notification-service-token
+.notification-service-token-*
+4_test_2fa.py
+test_password_recovery.py

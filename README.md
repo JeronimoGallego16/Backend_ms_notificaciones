@@ -12,6 +12,7 @@ la URL pública asignada al servicio:
 ```text
 POST {URL_DEL_SERVICIO}/2fa/request
 POST {URL_DEL_SERVICIO}/2fa/verify
+POST {URL_DEL_SERVICIO}/internal/email/password-recovery
 GET  {URL_DEL_SERVICIO}/health
 ```
 
@@ -64,13 +65,64 @@ TFA_HASH_SECRET=una-clave-secreta-larga
 fuera del repositorio. El servicio responde `502` si el envío del correo falla
 y `400` si el código es incorrecto, expiró o ya fue utilizado.
 
-`credentials/credentials.json` y `credentials/token.pickle` son credenciales
-locales de Gmail y no deben versionarse.
+## Recuperación de contraseña
 
-Para iniciar:
+El backend de seguridad puede solicitar el envío del enlace de recuperación:
+
+```http
+POST /internal/email/password-recovery
+X-Service-Token: <secreto-compartido>
+Content-Type: application/json
+
+{
+  "to": "usuario@ejemplo.com",
+  "recoveryUrl": "http://localhost:4200/authentication/reset-password?token=..."
+}
+```
+
+La ruta responde `202` cuando Gmail acepta el mensaje, `401` si falta o no es
+válido `X-Service-Token`, `503` si falta `GMAIL_SENDER` y `502` si falla Gmail.
+Este servicio solo retransmite el enlace recibido; no genera, valida ni guarda
+tokens. No se debe registrar el enlace ni el header de autenticación.
+
+Spring y FastAPI deben tener configurado el mismo secreto:
+
+```text
+Spring:  NOTIFICATION_SERVICE_TOKEN=<secreto-compartido>
+FastAPI: SERVICE_TOKEN=<secreto-compartido>
+FastAPI: GMAIL_SENDER=cuenta-que-envia@example.com
+Spring:  PASSWORD_RECOVERY_RESET_URL=http://localhost:4200/authentication/reset-password
+```
+
+Para el desarrollo local en Windows, ejecuta desde PowerShell:
+
+```powershell
+.\run-local-password-recovery.ps1 -GmailSender 'cuenta-autorizada@gmail.com'
+```
+
+Si omites `-GmailSender`, el iniciador usa `GMAIL_SENDER` si ya está definido
+en esa sesión; de lo contrario, lo solicita. FastAPI crea el secreto aleatorio
+al arrancar, una sola vez, en `.notification-service-token` (excluido de Git).
+FastAPI y Spring leen ese mismo archivo; el iniciador espera a que FastAPI
+complete su arranque antes de iniciar Spring. No imprime ni pide copiar el
+secreto. Este archivo compartido sirve únicamente para desarrollo en la misma
+máquina. En despliegue, ambos servicios deben recibir el mismo secreto desde
+el gestor de secretos o desde su entorno.
+
+`GMAIL_SENDER` debe ser una dirección válida y autorizada para Gmail API.
+
+`credentials/credentials.json` y `credentials/token.pickle` son credenciales
+locales de Gmail y no deben versionarse. La aplicación espera el cliente OAuth
+en `credentials/credentials.json`; en el primer envío abre el flujo de
+autorización requerido y guarda el token local en
+`credentials/token.pickle`. La respuesta `202` indica que Gmail API aceptó la
+solicitud, no confirma que el mensaje llegó a la bandeja del destinatario.
+
+Para iniciar solo FastAPI:
 
 ```bash
-uvicorn main:app --reload
+python -m pip install -r requirements.txt
+python -m uvicorn main:app --reload
 ```
 
 También puedes usar el botón **Run** de VS Code o ejecutar `python main.py`.
