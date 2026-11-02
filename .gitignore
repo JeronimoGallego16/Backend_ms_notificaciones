@@ -1,5 +1,7 @@
 credentials/
 .venv/
+__pycache__/
+*.pyc
 .tfa_hash_secret
 .env
 .env.*

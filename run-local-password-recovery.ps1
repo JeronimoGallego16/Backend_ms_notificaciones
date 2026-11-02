@@ -5,8 +5,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $serviceRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$projectRoot = Split-Path -Parent (Split-Path -Parent $serviceRoot)
-$springRoot = Join-Path $projectRoot 'ms_security-main'
+$projectRoot = Split-Path -Parent $serviceRoot
+$springRoot = Join-Path $projectRoot 'backEndProyecto1'
 
 if ([string]::IsNullOrWhiteSpace($GmailSender)) {
     $GmailSender = $env:GMAIL_SENDER
