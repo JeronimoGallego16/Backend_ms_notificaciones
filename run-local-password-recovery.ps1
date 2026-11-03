@@ -6,8 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 $serviceRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = Split-Path -Parent $serviceRoot
-$springRoot = Join-Path $projectRoot 'backEndProyecto1'
-
+$springRoot = Join-Path (Split-Path -Parent $projectRoot) 'ms_security-main' # ruta del backend de spring boot
 if ([string]::IsNullOrWhiteSpace($GmailSender)) {
     $GmailSender = $env:GMAIL_SENDER
 }
@@ -19,6 +18,21 @@ if ($GmailSender -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
 }
 if (-not (Test-Path -LiteralPath (Join-Path $springRoot 'mvnw.cmd'))) {
     throw 'The sibling Spring Boot project or its Maven wrapper was not found.'
+}
+$firebaseCredentialsPath = Join-Path $springRoot 'firebase-credentials.json'
+if (-not (Test-Path -LiteralPath $firebaseCredentialsPath -PathType Leaf)) {
+    throw 'Firebase credentials were not found in the Spring project root.'
+}
+try {
+    $firebaseProjectId = (
+        Get-Content -Raw -LiteralPath $firebaseCredentialsPath |
+            ConvertFrom-Json
+    ).project_id
+} catch {
+    throw 'The Firebase credentials file is not valid JSON.'
+}
+if ([string]::IsNullOrWhiteSpace($firebaseProjectId)) {
+    throw 'The Firebase credentials file does not contain project_id.'
 }
 if (-not (Test-Path -LiteralPath (Join-Path $serviceRoot 'credentials\credentials.json')) -and
     -not (Test-Path -LiteralPath (Join-Path $serviceRoot 'credentials\token.pickle'))) {
@@ -69,6 +83,17 @@ $previousSender = [Environment]::GetEnvironmentVariable(
     'GMAIL_SENDER',
     'Process'
 )
+$firebaseEnvironmentNames = @(
+    'FIREBASE_ENABLED',
+    'FIREBASE_PROJECT_ID',
+    'FIREBASE_CREDENTIALS_PATH',
+    'FIREBASE_CHECK_REVOKED'
+)
+$previousFirebaseEnvironment = @{}
+foreach ($name in $firebaseEnvironmentNames) {
+    $previousFirebaseEnvironment[$name] =
+        [Environment]::GetEnvironmentVariable($name, 'Process')
+}
 $fastApiProcess = $null
 try {
     # Both services read the same ignored file; don't let stale environment
@@ -80,6 +105,10 @@ try {
         'Process'
     )
     $env:GMAIL_SENDER = $GmailSender
+    $env:FIREBASE_ENABLED = 'true'
+    $env:FIREBASE_PROJECT_ID = $firebaseProjectId
+    $env:FIREBASE_CREDENTIALS_PATH = $firebaseCredentialsPath
+    $env:FIREBASE_CHECK_REVOKED = 'true'
 
     Write-Host 'Starting FastAPI; its startup creates the shared token if needed.'
     $fastApiProcess = Start-Process -FilePath $pythonExe `
@@ -142,4 +171,11 @@ try {
         $previousSender,
         'Process'
     )
+    foreach ($name in $firebaseEnvironmentNames) {
+        [Environment]::SetEnvironmentVariable(
+            $name,
+            $previousFirebaseEnvironment[$name],
+            'Process'
+        )
+    }
 }
