@@ -128,3 +128,5 @@ python -m uvicorn main:app --reload
 También puedes usar el botón **Run** de VS Code o ejecutar `python main.py`.
 En desarrollo se crea automáticamente `.tfa_hash_secret`, que está excluido
 de Git. En producción debes definir explícitamente `TFA_HASH_SECRET`.
+
+.\Backend_ms_notificaciones\run-local-password-recovery.ps1 -GmailSender 'jose.rodriguez45340@ucaldas.edu.co'
