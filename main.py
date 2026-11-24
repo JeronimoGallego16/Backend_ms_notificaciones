@@ -20,19 +20,22 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 from typing import AsyncIterator
 
+import httplib2
 from fastapi import FastAPI, Header, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field
 from google.auth.transport.requests import Request
+from google_auth_httplib2 import AuthorizedHttp
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import Resource, build
+from pydantic import BaseModel, ConfigDict, Field
 
 
 logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
+GMAIL_HTTP_TIMEOUT_SECONDS = 10
 BASE_DIR = Path(__file__).resolve().parent
 CREDENTIALS_DIR = BASE_DIR / "credentials"
 CLIENT_SECRET_FILE = CREDENTIALS_DIR / "credentials.json"
@@ -351,7 +354,9 @@ def authenticate_gmail():
 
     if not credentials or not credentials.valid:
         if credentials and credentials.expired and credentials.refresh_token:
-            credentials.refresh(Request())
+            credentials.refresh(
+                partial(Request(), timeout=GMAIL_HTTP_TIMEOUT_SECONDS)
+            )
         else:
             if not CLIENT_SECRET_FILE.exists():
                 raise FileNotFoundError(
@@ -373,7 +378,16 @@ def authenticate_gmail():
 @lru_cache(maxsize=1)
 def get_gmail_service() -> Resource:
     credentials = authenticate_gmail()
-    return build("gmail", "v1", credentials=credentials)
+    http = AuthorizedHttp(
+        credentials,
+        http=httplib2.Http(timeout=GMAIL_HTTP_TIMEOUT_SECONDS),
+    )
+    return build(
+        "gmail",
+        "v1",
+        http=http,
+        cache_discovery=False,
+    )
 
 
 def create_message(
